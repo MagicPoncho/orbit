@@ -14,73 +14,34 @@
 #include "Pdb.h"
 
 //-----------------------------------------------------------------------------
-SessionsDataView::SessionsDataView() {
-  InitColumnsIfNeeded();
-  m_SortingOrders.insert(m_SortingOrders.end(), s_InitialOrders.begin(),
-                         s_InitialOrders.end());
+SessionsDataView::SessionsDataView() : DataView(DataViewType::SESSIONS) {
   GOrbitApp->RegisterSessionsDataView(this);
 }
 
 //-----------------------------------------------------------------------------
-std::vector<std::string> SessionsDataView::s_Headers;
-std::vector<float> SessionsDataView::s_HeaderRatios;
-std::vector<DataView::SortingOrder> SessionsDataView::s_InitialOrders;
-
-//-----------------------------------------------------------------------------
-void SessionsDataView::InitColumnsIfNeeded() {
-  if (s_Headers.empty()) {
-    s_Headers.emplace_back("Session");
-    s_HeaderRatios.push_back(0.5);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Process");
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    // s_Headers.emplace_back("LastUsed");
-    // s_HeaderRatios.push_back(0);
-    // s_InitialOrders.push_back(DescendingOrder);
-  }
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<std::string>& SessionsDataView::GetColumnHeaders() {
-  return s_Headers;
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<float>& SessionsDataView::GetColumnHeadersRatios() {
-  return s_HeaderRatios;
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<DataView::SortingOrder>&
-SessionsDataView::GetColumnInitialOrders() {
-  return s_InitialOrders;
+const std::vector<DataView::Column>& SessionsDataView::GetColumns() {
+  static const std::vector<Column> columns = [] {
+    std::vector<Column> columns;
+    columns.resize(COLUMN_NUM);
+    columns[COLUMN_SESSION_NAME] = {"Session", .5f, SortingOrder::Ascending};
+    columns[COLUMN_PROCESS_NAME] = {"Process", .5f, SortingOrder::Ascending};
+    return columns;
+  }();
+  return columns;
 }
 
 //-----------------------------------------------------------------------------
 std::string SessionsDataView::GetValue(int row, int col) {
-  std::string value;
-
   const std::shared_ptr<Session>& session = GetSession(row);
 
   switch (col) {
-    case SDV_SessionName:
-      value = Path::GetFileName(session->m_FileName);
-      break;
-    case SDV_ProcessName:
-      value = Path::GetFileName(session->m_ProcessFullPath);
-      break;
-      //    case SDV_LastUsed:
-      //        value = "LastUsed";
-      //        break;
-      break;
+    case COLUMN_SESSION_NAME:
+      return Path::GetFileName(session->m_FileName);
+    case COLUMN_PROCESS_NAME:
+      return Path::GetFileName(session->m_ProcessFullPath);
     default:
-      break;
+      return "";
   }
-
-  return value;
 }
 
 //-----------------------------------------------------------------------------
@@ -97,22 +58,15 @@ std::string SessionsDataView::GetToolTip(int a_Row, int /*a_Column*/) {
   }
 
 //-----------------------------------------------------------------------------
-void SessionsDataView::OnSort(int a_Column,
-                              std::optional<SortingOrder> a_NewOrder) {
-  auto pdvColumn = static_cast<SdvColumn>(a_Column);
-
-  if (a_NewOrder.has_value()) {
-    m_SortingOrders[pdvColumn] = a_NewOrder.value();
-  }
-
-  bool ascending = m_SortingOrders[pdvColumn] == AscendingOrder;
+void SessionsDataView::DoSort() {
+  bool ascending = m_SortingOrders[m_SortingColumn] == SortingOrder::Ascending;
   std::function<bool(int a, int b)> sorter = nullptr;
 
-  switch (pdvColumn) {
-    case SDV_SessionName:
+  switch (m_SortingColumn) {
+    case COLUMN_SESSION_NAME:
       sorter = ORBIT_SESSION_SORT(m_FileName);
       break;
-    case SDV_ProcessName:
+    case COLUMN_PROCESS_NAME:
       sorter = ORBIT_SESSION_SORT(m_ProcessFullPath);
       break;
     default:
@@ -120,10 +74,8 @@ void SessionsDataView::OnSort(int a_Column,
   }
 
   if (sorter) {
-    std::sort(m_Indices.begin(), m_Indices.end(), sorter);
+    std::stable_sort(m_Indices.begin(), m_Indices.end(), sorter);
   }
-
-  m_LastSortedColumn = a_Column;
 }
 
 //-----------------------------------------------------------------------------
@@ -154,10 +106,10 @@ void SessionsDataView::OnContextMenu(const std::string& a_Action,
 }
 
 //-----------------------------------------------------------------------------
-void SessionsDataView::OnFilter(const std::string& a_Filter) {
+void SessionsDataView::DoFilter() {
   std::vector<uint32_t> indices;
 
-  std::vector<std::string> tokens = Tokenize(ToLower(a_Filter));
+  std::vector<std::string> tokens = Tokenize(ToLower(m_Filter));
 
   for (size_t i = 0; i < m_Sessions.size(); ++i) {
     const Session& session = *m_Sessions[i];
@@ -181,9 +133,7 @@ void SessionsDataView::OnFilter(const std::string& a_Filter) {
 
   m_Indices = indices;
 
-  if (m_LastSortedColumn != -1) {
-    OnSort(m_LastSortedColumn, {});
-  }
+  OnSort(m_SortingColumn, {});
 }
 
 //-----------------------------------------------------------------------------
@@ -193,9 +143,7 @@ void SessionsDataView::OnDataChanged() {
     m_Indices[i] = i;
   }
 
-  if (m_LastSortedColumn != -1) {
-    OnSort(m_LastSortedColumn, {});
-  }
+  DataView::OnDataChanged();
 }
 
 //-----------------------------------------------------------------------------

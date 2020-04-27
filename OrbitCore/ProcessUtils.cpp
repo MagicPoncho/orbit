@@ -131,7 +131,7 @@ void ProcessList::Refresh() {
       } else {
         // Process was not there previously
         auto process = std::make_shared<Process>();
-        process->m_Name = ws2s(processinfo.szExeFile);
+        process->SetName(ws2s(processinfo.szExeFile));
         process->SetID(processinfo.th32ProcessID);
 
         // Full path
@@ -142,10 +142,12 @@ void ProcessList::Refresh() {
           moduleEntry.dwSize = sizeof(MODULEENTRY32);
           BOOL res = Module32First(moduleSnapshot, &moduleEntry);
           if (res) {
-            process->m_FullName = ws2s(moduleEntry.szExePath);
+            process->SetFullPath(ws2s(moduleEntry.szExePath));
+            // TODO: Append arguments.
+            process->SetCmdLine(process->GetFullPath());
           } else {
             ERROR("Call to Module32First failed for %s (pid=%d)",
-                  process->m_Name.c_str(), processinfo.th32ProcessID);
+                  process->GetName(), processinfo.th32ProcessID);
           }
 
           CloseHandle(moduleSnapshot);
@@ -162,11 +164,11 @@ void ProcessList::Refresh() {
 
 #else
   processes_.clear();
-  struct dirent* de_DirEntity = NULL;
-  DIR* dir_proc = NULL;
+  struct dirent* de_DirEntity = nullptr;
+  DIR* dir_proc = nullptr;
 
   dir_proc = opendir(PROC_DIRECTORY);
-  if (dir_proc == NULL) {
+  if (dir_proc == nullptr) {
     perror("Couldn't open the " PROC_DIRECTORY " directory");
     return;
   }
@@ -180,12 +182,19 @@ void ProcessList::Refresh() {
         process = std::make_shared<Process>();
         std::string dir =
             absl::StrFormat("%s%s/", PROC_DIRECTORY, de_DirEntity->d_name);
-        process->m_Name = FileToString(dir + "comm");
-        absl::StripTrailingAsciiWhitespace(
-            &process->m_Name);  // Remove new line character.
+        std::string name = FileToString(dir + "comm");
+        // Remove new line character.
+        absl::StripTrailingAsciiWhitespace(&name);
+        process->SetName(name);
+
+        // "The command-line arguments appear [...] as a set of strings
+        // separated by null bytes ('\0')".
         std::string cmdline = FileToString(dir + "cmdline");
+        process->SetFullPath(cmdline.substr(0, cmdline.find('\0')));
+
         std::replace(cmdline.begin(), cmdline.end(), '\0', ' ');
-        process->m_FullName = cmdline;
+        process->SetCmdLine(cmdline);
+
         process->SetID(pid);
         processes_map_[pid] = process;
       } else {
@@ -209,7 +218,7 @@ void ProcessList::SortByID() {
 void ProcessList::SortByName() {
   std::sort(processes_.begin(), processes_.end(),
             [](std::shared_ptr<Process>& a_P1, std::shared_ptr<Process>& a_P2) {
-              return a_P1->m_Name < a_P2->m_Name;
+              return a_P1->GetName() < a_P2->GetName();
             });
 }
 

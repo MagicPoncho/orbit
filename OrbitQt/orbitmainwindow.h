@@ -8,7 +8,8 @@
 #include <memory>
 #include <thread>
 
-#include "../OrbitGl/DataViewTypes.h"
+#include "ApplicationOptions.h"
+#include "DataViewTypes.h"
 
 namespace Ui {
 class OrbitMainWindow;
@@ -18,8 +19,8 @@ class OrbitMainWindow : public QMainWindow {
   Q_OBJECT
 
  public:
-  explicit OrbitMainWindow(QApplication* a_App, QWidget* parent = 0);
-  ~OrbitMainWindow();
+  OrbitMainWindow(QApplication* a_App, ApplicationOptions&& options);
+  ~OrbitMainWindow() override;
 
   void RegisterGlWidget(class OrbitGLWidget* a_GlWidget) {
     m_GlWidgets.push_back(a_GlWidget);
@@ -34,8 +35,7 @@ class OrbitMainWindow : public QMainWindow {
   void OnNewSelection(std::shared_ptr<class SamplingReport> a_SamplingReport);
   void OnReceiveMessage(const std::string& message);
   void OnAddToWatch(const class Variable* a_Variable);
-  void OnGetSaveFileName(const std::wstring& a_Extension,
-                         std::wstring& a_FileName);
+  std::string OnGetSaveFileName(const std::string& extension);
   void OnSetClipboard(const std::wstring& a_Text);
   void ParseCommandlineArguments();
   bool IsHeadless() { return m_Headless; }

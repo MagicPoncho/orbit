@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 
+#include "ApplicationOptions.h"
 #include "ContextSwitch.h"
 #include "CoreApp.h"
 #include "DataViewTypes.h"
@@ -18,16 +19,20 @@
 #include "SymbolHelper.h"
 #include "Threading.h"
 
+#if defined(_WIN32)
+#include "Debugger.h"
+#endif
+
 struct CallStack;
 class Process;
 
 //-----------------------------------------------------------------------------
 class OrbitApp : public CoreApp {
  public:
-  OrbitApp();
-  virtual ~OrbitApp();
+  explicit OrbitApp(ApplicationOptions&& options);
+  ~OrbitApp() override;
 
-  static bool Init();
+  static bool Init(ApplicationOptions&& options);
   void PostInit();
   static int OnExit();
   static void MainTick();
@@ -38,18 +43,18 @@ class OrbitApp : public CoreApp {
 
   std::wstring GetCaptureFileName();
   std::string GetSessionFileName();
-  std::wstring GetSaveFile(const std::wstring& a_Extension);
+  std::string GetSaveFile(const std::string& extension);
   void SetClipboard(const std::wstring& a_Text);
   void OnSaveSession(const std::string& file_name);
-  void OnLoadSession(const std::string& file_name);
+  bool OnLoadSession(const std::string& file_name);
   void OnSaveCapture(const std::string& file_name);
   void OnLoadCapture(const std::string& file_name);
   void OnOpenPdb(const std::string& file_name);
   void OnLaunchProcess(const std::string& process_name,
                        const std::string& working_dir, const std::string& args);
   void Inject(const std::string& file_name);
-  virtual void StartCapture();
-  virtual void StopCapture();
+  void StartCapture();
+  void StopCapture();
   void ToggleCapture();
   void OnDisconnect();
   void OnPdbLoaded();
@@ -121,8 +126,7 @@ class OrbitApp : public CoreApp {
   void AddWatchCallback(WatchCallback a_Callback) {
     m_AddToWatchCallbacks.emplace_back(std::move(a_Callback));
   }
-  typedef std::function<void(const std::wstring& a_Extension,
-                             std::wstring& o_Variable)>
+  typedef std::function<std::string(const std::string& a_Extension)>
       SaveFileCallback;
   void SetSaveFileCallback(SaveFileCallback a_Callback) {
     m_SaveFileCallback = std::move(a_Callback);
@@ -151,6 +155,8 @@ class OrbitApp : public CoreApp {
   }
 
   void SetCommandLineArguments(const std::vector<std::string>& a_Args);
+
+  // TODO(antonrohr) check whether this is still used
   const std::vector<std::string>& GetCommandLineArguments() {
     return m_Arguments;
   }
@@ -190,8 +196,6 @@ class OrbitApp : public CoreApp {
   void ApplySession(const Session& session) override;
   void LoadSession(const std::shared_ptr<Session>& session);
   void LaunchRuleEditor(class Function* a_Function);
-  void SetHeadless(bool a_Headless) { m_Headless = a_Headless; }
-  bool GetHeadless() const { return m_Headless; }
   void SetIsRemote(bool a_IsRemote) { m_IsRemote = a_IsRemote; }
   bool IsRemote() const { return m_IsRemote; }
   bool HasTcpServer() const { return !IsRemote(); }
@@ -201,6 +205,8 @@ class OrbitApp : public CoreApp {
       override;
 
  private:
+  ApplicationOptions options_;
+
   std::vector<std::string> m_Arguments;
   std::vector<RefreshCallback> m_RefreshCallbacks;
   std::vector<WatchCallback> m_AddToWatchCallbacks;
@@ -211,7 +217,6 @@ class OrbitApp : public CoreApp {
   FindFileCallback m_FindFileCallback;
   SaveFileCallback m_SaveFileCallback;
   ClipboardCallback m_ClipboardCallback;
-  bool m_Headless = false;
   bool m_IsRemote = false;
 
   ProcessesDataView* m_ProcessesDataView = nullptr;
@@ -252,13 +257,14 @@ class OrbitApp : public CoreApp {
   std::vector<std::shared_ptr<struct Module> > m_ModulesToLoad;
   std::vector<std::string> m_PostInitArguments;
 
-  class Debugger* m_Debugger = nullptr;
   int m_NumTicks = 0;
 
   std::shared_ptr<StringManager> string_manager_ = nullptr;
 
   const SymbolHelper symbol_helper_;
-#ifndef _WIN32
+#if defined(_WIN32)
+  std::unique_ptr<Debugger> m_Debugger;
+#else
   std::shared_ptr<class BpfTrace> m_BpfTrace;
 #endif
 };

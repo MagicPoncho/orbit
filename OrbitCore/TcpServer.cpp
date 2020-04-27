@@ -52,8 +52,8 @@ TcpServer::~TcpServer() {
 }
 
 //-----------------------------------------------------------------------------
-void TcpServer::Start(unsigned short a_Port) {
-  TcpEntity::Start();
+void TcpServer::StartServer(uint16_t a_Port) {
+  Start();
 
   PRINT_FUNC;
   m_TcpService = new TcpService();
@@ -65,6 +65,7 @@ void TcpServer::Start(unsigned short a_Port) {
 
   m_StatTimer.Start();
   m_IsValid = true;
+  m_Port = a_Port;
 }
 
 //-----------------------------------------------------------------------------
@@ -78,8 +79,8 @@ void TcpServer::ResetStats() {
 //-----------------------------------------------------------------------------
 std::vector<std::string> TcpServer::GetStats() {
   std::vector<std::string> stats;
-  stats.push_back(VAR_TO_ANSI(m_NumReceivedMessages));
-  stats.push_back(VAR_TO_ANSI(m_NumMessagesPerSecond));
+  stats.push_back(VAR_TO_STR(m_NumReceivedMessages));
+  stats.push_back(VAR_TO_STR(m_NumMessagesPerSecond));
 
   if (m_TcpServer) {
     std::string bytesRcv = "Capture::GNumBytesReceiced = " +

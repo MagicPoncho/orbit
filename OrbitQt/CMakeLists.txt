@@ -15,6 +15,7 @@ target_sources(
           orbitglwidgetwithheader.h
           orbitmainwindow.h
           orbitsamplingreport.h
+          OrbitStartupWindow.h
           orbittablemodel.h
           orbittreeitem.h
           orbittreemodel.h
@@ -38,6 +39,7 @@ target_sources(
           orbitglwidgetwithheader.cpp
           orbitmainwindow.cpp
           orbitsamplingreport.cpp
+          OrbitStartupWindow.cpp
           orbittablemodel.cpp
           orbittreeitem.cpp
           orbittreemodel.cpp
@@ -71,7 +73,7 @@ target_sources(
 
 target_include_directories(OrbitQt PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(OrbitQt PRIVATE OrbitCore OrbitGl Qt5::Widgets Qt5::Core)
+target_link_libraries(OrbitQt PRIVATE OrbitCore OrbitGl OrbitGgp Qt5::Widgets Qt5::Core)
 
 if(WIN32)
   # Administrator privileges
@@ -97,3 +99,5 @@ endif()
 set_target_properties(OrbitQt PROPERTIES OUTPUT_NAME "Orbit")
 set_target_properties(OrbitQt PROPERTIES AUTOMOC ON)
 set_target_properties(OrbitQt PROPERTIES AUTOUIC ON)
+strip_symbols(OrbitQt)
+

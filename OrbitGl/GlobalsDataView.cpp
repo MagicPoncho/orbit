@@ -14,75 +14,26 @@
 #include "absl/strings/str_format.h"
 
 //-----------------------------------------------------------------------------
-GlobalsDataView::GlobalsDataView() {
-  InitColumnsIfNeeded();
-  m_SortingOrders.insert(m_SortingOrders.end(), s_InitialOrders.begin(),
-                         s_InitialOrders.end());
+GlobalsDataView::GlobalsDataView() : DataView(DataViewType::GLOBALS) {
   OnDataChanged();
-
   GOrbitApp->RegisterGlobalsDataView(this);
 }
 
 //-----------------------------------------------------------------------------
-std::vector<std::string> GlobalsDataView::s_Headers;
-std::vector<int> GlobalsDataView::s_HeaderMap;
-std::vector<float> GlobalsDataView::s_HeaderRatios;
-std::vector<DataView::SortingOrder> GlobalsDataView::s_InitialOrders;
-
-//-----------------------------------------------------------------------------
-void GlobalsDataView::InitColumnsIfNeeded() {
-  if (s_Headers.empty()) {
-    s_Headers.emplace_back("Index");
-    s_HeaderMap.push_back(Variable::INDEX);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Variable");
-    s_HeaderMap.push_back(Variable::NAME);
-    s_HeaderRatios.push_back(0.5f);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Type");
-    s_HeaderMap.push_back(Variable::TYPE);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Address");
-    s_HeaderMap.push_back(Variable::ADDRESS);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("File");
-    s_HeaderMap.push_back(Variable::FILE);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Line");
-    s_HeaderMap.push_back(Variable::LINE);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-
-    s_Headers.emplace_back("Module");
-    s_HeaderMap.push_back(Variable::MODULE);
-    s_HeaderRatios.push_back(0);
-    s_InitialOrders.push_back(AscendingOrder);
-  }
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<std::string>& GlobalsDataView::GetColumnHeaders() {
-  return s_Headers;
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<float>& GlobalsDataView::GetColumnHeadersRatios() {
-  return s_HeaderRatios;
-}
-
-//-----------------------------------------------------------------------------
-const std::vector<DataView::SortingOrder>&
-GlobalsDataView::GetColumnInitialOrders() {
-  return s_InitialOrders;
+const std::vector<DataView::Column>& GlobalsDataView::GetColumns() {
+  static const std::vector<Column> columns = [] {
+    std::vector<Column> columns;
+    columns.resize(COLUMN_NUM);
+    columns[COLUMN_INDEX] = {"Index", .0f, SortingOrder::Ascending};
+    columns[COLUMN_NAME] = {"Variable", .5f, SortingOrder::Ascending};
+    columns[COLUMN_TYPE] = {"Type", .0f, SortingOrder::Ascending};
+    columns[COLUMN_FILE] = {"File", .0f, SortingOrder::Ascending};
+    columns[COLUMN_LINE] = {"Line", .0f, SortingOrder::Ascending};
+    columns[COLUMN_MODULE] = {"Module", .0f, SortingOrder::Ascending};
+    columns[COLUMN_ADDRESS] = {"Address", .0f, SortingOrder::Ascending};
+    return columns;
+  }();
+  return columns;
 }
 
 //-----------------------------------------------------------------------------
@@ -91,38 +42,24 @@ std::string GlobalsDataView::GetValue(int a_Row, int a_Column) {
 
   const Variable& variable = GetVariable(a_Row);
 
-  std::string value;
-
-  switch (s_HeaderMap[a_Column]) {
-    case Variable::INDEX:
-      value = absl::StrFormat("%d", a_Row);
-      break;
-    case Variable::SELECTED:
-      value = variable.m_Selected ? "*" : "";
-      break;
-    case Variable::NAME:
-      value = variable.m_Name;
-      break;
-    case Variable::TYPE:
-      value = variable.m_Type;
-      break;
-    case Variable::FILE:
-      value = variable.m_File;
-      break;
-    case Variable::MODULE:
-      value = variable.m_Pdb->GetName();
-      break;
-    case Variable::ADDRESS:
-      value = absl::StrFormat("0x%llx", variable.m_Address);
-      break;
-    case Variable::LINE:
-      value = absl::StrFormat("%i", variable.m_Line);
-      break;
+  switch (a_Column) {
+    case COLUMN_INDEX:
+      return absl::StrFormat("%d", a_Row);
+    case COLUMN_NAME:
+      return variable.m_Name;
+    case COLUMN_TYPE:
+      return variable.m_Type;
+    case COLUMN_FILE:
+      return variable.m_File;
+    case COLUMN_LINE:
+      return absl::StrFormat("%i", variable.m_Line);
+    case COLUMN_MODULE:
+      return variable.m_Pdb->GetName();
+    case COLUMN_ADDRESS:
+      return absl::StrFormat("0x%llx", variable.m_Address);
     default:
-      break;
+      return "";
   }
-
-  return value;
 }
 
 //-----------------------------------------------------------------------------
@@ -133,47 +70,39 @@ std::string GlobalsDataView::GetValue(int a_Row, int a_Column) {
   }
 
 //-----------------------------------------------------------------------------
-void GlobalsDataView::OnSort(int a_Column,
-                             std::optional<SortingOrder> a_NewOrder) {
-  const std::vector<Variable*>& functions =
-      Capture::GTargetProcess->GetGlobals();
-  auto memberId = static_cast<Variable::MemberID>(s_HeaderMap[a_Column]);
-
-  if (a_NewOrder.has_value()) {
-    m_SortingOrders[a_Column] = a_NewOrder.value();
-  }
-
-  bool ascending = m_SortingOrders[a_Column] == AscendingOrder;
+void GlobalsDataView::DoSort() {
+  bool ascending = m_SortingOrders[m_SortingColumn] == SortingOrder::Ascending;
   std::function<bool(int a, int b)> sorter = nullptr;
 
-  switch (memberId) {
-    case Variable::NAME:
+  const std::vector<Variable*>& functions =
+      Capture::GTargetProcess->GetGlobals();
+
+  switch (m_SortingColumn) {
+    case COLUMN_NAME:
       sorter = ORBIT_FUNC_SORT(m_Name);
       break;
-    case Variable::ADDRESS:
-      sorter = ORBIT_FUNC_SORT(m_Address);
-      break;
-    case Variable::TYPE:
+    case COLUMN_TYPE:
       sorter = ORBIT_FUNC_SORT(m_Type);
       break;
-    case Variable::MODULE:
-      sorter = ORBIT_FUNC_SORT(m_Pdb->GetName());
-      break;
-    case Variable::FILE:
+    case COLUMN_FILE:
       sorter = ORBIT_FUNC_SORT(m_File);
       break;
-    case Variable::SELECTED:
-      sorter = ORBIT_FUNC_SORT(m_Selected);
+    case COLUMN_LINE:
+      sorter = ORBIT_FUNC_SORT(m_Line);
+      break;
+    case COLUMN_MODULE:
+      sorter = ORBIT_FUNC_SORT(m_Pdb->GetName());
+      break;
+    case COLUMN_ADDRESS:
+      sorter = ORBIT_FUNC_SORT(m_Address);
       break;
     default:
       break;
   }
 
   if (sorter) {
-    std::sort(m_Indices.begin(), m_Indices.end(), sorter);
+    std::stable_sort(m_Indices.begin(), m_Indices.end(), sorter);
   }
-
-  m_LastSortedColumn = a_Column;
 }
 
 //-----------------------------------------------------------------------------
@@ -193,14 +122,14 @@ void GlobalsDataView::OnContextMenu(const std::string& a_Action,
                                     int a_MenuIndex,
                                     const std::vector<int>& a_ItemIndices) {
   if (a_Action == MENU_ACTION_TYPES_MENU_WATCH) {
-    OnAddToWatch(a_ItemIndices);
+    AddToWatch(a_ItemIndices);
   } else {
     DataView::OnContextMenu(a_Action, a_MenuIndex, a_ItemIndices);
   }
 }
 
 //-----------------------------------------------------------------------------
-void GlobalsDataView::OnAddToWatch(const std::vector<int>& a_Items) {
+void GlobalsDataView::AddToWatch(const std::vector<int>& a_Items) {
   for (auto& item : a_Items) {
     Variable& variable = GetVariable(item);
     variable.Populate();
@@ -220,14 +149,14 @@ void GlobalsDataView::OnAddToWatch(const std::vector<int>& a_Items) {
 }
 
 //-----------------------------------------------------------------------------
-void GlobalsDataView::OnFilter(const std::string& a_Filter) {
-  m_FilterTokens = Tokenize(ToLower(a_Filter));
+void GlobalsDataView::DoFilter() {
+  m_FilterTokens = Tokenize(ToLower(m_Filter));
 
+  // TODO: This only performs work on Windows. It is currently not an issue as
+  //  globals are not supported elsewhere.
   ParallelFilter();
 
-  if (m_LastSortedColumn != -1) {
-    OnSort(m_LastSortedColumn, {});
-  }
+  OnSort(m_SortingColumn, {});
 }
 
 //-----------------------------------------------------------------------------
@@ -275,6 +204,8 @@ void GlobalsDataView::OnDataChanged() {
   for (size_t i = 0; i < numGlobals; ++i) {
     m_Indices[i] = i;
   }
+
+  DataView::OnDataChanged();
 }
 
 //-----------------------------------------------------------------------------

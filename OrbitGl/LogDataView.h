@@ -13,8 +13,9 @@ struct CallStack;
 class LogDataView : public DataView {
  public:
   LogDataView();
-  const std::vector<std::string>& GetColumnHeaders() override;
-  const std::vector<float>& GetColumnHeadersRatios() override;
+
+  const std::vector<Column>& GetColumns() override;
+  int GetDefaultSortingColumn() override { return COLUMN_TIME; }
   std::vector<std::string> GetContextMenu(
       int a_ClickedIndex, const std::vector<int>& a_SelectedIndices) override;
   std::string GetValue(int a_Row, int a_Column) override;
@@ -23,23 +24,25 @@ class LogDataView : public DataView {
   bool SkipTimer() override;
 
   void OnDataChanged() override;
-  void OnFilter(const std::string& a_Filter) override;
   void OnContextMenu(const std::string& a_Action, int a_MenuIndex,
                      const std::vector<int>& a_ItemIndices) override;
 
   void Add(const OrbitLogEntry& a_Msg);
-  const OrbitLogEntry& GetEntry(unsigned int a_Row) const;
   void OnReceiveMessage(const Message& a_Msg);
 
-  enum OdvColumn { LDV_Message, LDV_Time, LDV_ThreadId, LDV_NumColumns };
-
  protected:
+  // TODO: DoSort() override;
+  void DoFilter() override;
+  const OrbitLogEntry& GetEntry(unsigned int a_Row) const;
+
   std::vector<OrbitLogEntry> m_Entries;
   Mutex m_Mutex;
   std::shared_ptr<CallStack> m_SelectedCallstack;
 
-  static void InitColumnsIfNeeded();
-  static std::vector<std::string> s_Headers;
-  static std::vector<float> s_HeaderRatios;
-  static std::vector<SortingOrder> s_InitialOrders;
+  enum ColumnIndex {
+    COLUMN_MESSAGE,
+    COLUMN_TIME,
+    COLUMN_THREAD_ID,
+    COLUMN_NUM
+  };
 };

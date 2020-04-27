@@ -41,8 +41,8 @@ Process::Process() {
 }
 
 //-----------------------------------------------------------------------------
-Process::Process(DWORD a_ID) {
-  m_ID = a_ID;
+Process::Process(uint32_t id) {
+  m_ID = id;
   m_Handle = 0;
   m_Is64Bit = false;
   m_CpuUsage = 0;
@@ -85,7 +85,7 @@ void Process::LoadDebugInfo() {
     // SymInit(m_Handle);
 
     // Load module information
-    /*string symbolPath = Path::GetDirectory(this->GetFullName()).c_str();
+    /*string symbolPath = Path::GetDirectory(this->GetFullPath()).c_str();
     SymSetSearchPath(m_Handle, symbolPath.c_str());*/
 
     // List threads
@@ -96,8 +96,8 @@ void Process::LoadDebugInfo() {
 }
 
 //-----------------------------------------------------------------------------
-void Process::SetID(DWORD a_ID) {
-  m_ID = a_ID;
+void Process::SetID(uint32_t id) {
+  m_ID = id;
   Init();
 }
 
@@ -268,7 +268,7 @@ Function* Process::GetFunctionFromAddress(uint64_t address, bool a_IsExact) {
 }
 
 //-----------------------------------------------------------------------------
-std::shared_ptr<Module> Process::GetModuleFromAddress(DWORD64 a_Address) {
+std::shared_ptr<Module> Process::GetModuleFromAddress(uint64_t a_Address) {
   if (m_Modules.empty()) {
     return nullptr;
   }
@@ -316,7 +316,7 @@ std::shared_ptr<OrbitDiaSymbol> Process::SymbolFromAddress(DWORD64 a_Address) {
 #endif
 
 //-----------------------------------------------------------------------------
-bool Process::LineInfoFromAddress(DWORD64 a_Address, LineInfo& o_LineInfo) {
+bool Process::LineInfoFromAddress(uint64_t a_Address, LineInfo& o_LineInfo) {
 #ifdef _WIN32
   std::shared_ptr<Module> module = GetModuleFromAddress(a_Address);
   if (module && module->m_Pdb) {
@@ -446,7 +446,7 @@ bool Process::SetPrivilege(LPCTSTR a_Name, bool a_Enable) {
   LUID luid;
   if (!LookupPrivilegeValue(NULL, a_Name, &luid)) {
     ORBIT_ERROR;
-    PRINT("LookupPrivilegeValue error: ");
+    LOG("LookupPrivilegeValue error: ");
     PRINT_VAR(GetLastErrorAsString());
     return false;
   }
@@ -458,13 +458,13 @@ bool Process::SetPrivilege(LPCTSTR a_Name, bool a_Enable) {
   if (!AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES),
                              (PTOKEN_PRIVILEGES)NULL, (PDWORD)NULL)) {
     ORBIT_ERROR;
-    PRINT("AdjustTokenPrivileges error: ");
+    LOG("AdjustTokenPrivileges error: ");
     PRINT_VAR(GetLastErrorAsString());
     return false;
   }
 
   if (GetLastError() == ERROR_NOT_ALL_ASSIGNED) {
-    PRINT("The token does not have the specified privilege. \n");
+    LOG("The token does not have the specified privilege.");
     return false;
   }
 
@@ -473,14 +473,14 @@ bool Process::SetPrivilege(LPCTSTR a_Name, bool a_Enable) {
 #endif
 
 //-----------------------------------------------------------------------------
-DWORD64 Process::GetOutputDebugStringAddress() {
+uint64_t Process::GetOutputDebugStringAddress() {
 #ifdef _WIN32
   auto it = m_NameToModuleMap.find("kernelbase.dll");
   if (it != m_NameToModuleMap.end()) {
     std::shared_ptr<Module> module = it->second;
     auto remoteAddr = Injection::GetRemoteProcAddress(
         GetHandle(), module->m_ModuleHandle, "OutputDebugStringA");
-    return (DWORD64)remoteAddr;
+    return reinterpret_cast<uintptr_t>(remoteAddr);
   }
 
 #endif
@@ -488,14 +488,14 @@ DWORD64 Process::GetOutputDebugStringAddress() {
 }
 
 //-----------------------------------------------------------------------------
-DWORD64 Process::GetRaiseExceptionAddress() {
+uint64_t Process::GetRaiseExceptionAddress() {
 #ifdef _WIN32
   auto it = m_NameToModuleMap.find("kernelbase.dll");
   if (it != m_NameToModuleMap.end()) {
     std::shared_ptr<Module> module = it->second;
     auto remoteAddr = Injection::GetRemoteProcAddress(
         GetHandle(), module->m_ModuleHandle, "RaiseException");
-    return (DWORD64)remoteAddr;
+    return reinterpret_cast<uintptr_t>(remoteAddr);
   }
 #endif
 
@@ -534,9 +534,10 @@ void Process::FindCoreFunctions() {
 }
 
 //-----------------------------------------------------------------------------
-ORBIT_SERIALIZE(Process, 2) {
+ORBIT_SERIALIZE(Process, 3) {
   ORBIT_NVP_VAL(0, m_Name);
-  ORBIT_NVP_VAL(0, m_FullName);
+  ORBIT_NVP_VAL(3, m_FullPath);
+  ORBIT_NVP_VAL(3, m_CmdLine);
   ORBIT_NVP_VAL(0, m_ID);
   ORBIT_NVP_VAL(0, m_IsElevated);
   ORBIT_NVP_VAL(0, m_CpuUsage);

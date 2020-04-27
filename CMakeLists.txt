@@ -13,6 +13,7 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
                            -Werror=float-conversion)
 endif()
 
+include(cmake/strip.cmake)
 include(cmake/tests.cmake)
 enable_testing()
 
@@ -82,6 +83,7 @@ if(WITH_GUI)
 endif()
 find_package(abseil CONFIG REQUIRED)
 find_package(llvm_object CONFIG REQUIRED)
+find_package(Outcome CONFIG REQUIRED)
 
 if(NOT WIN32)
   find_package(libunwindstack CONFIG REQUIRED)
@@ -125,6 +127,7 @@ add_subdirectory(OrbitTest)
 if(WITH_GUI)
   add_subdirectory(OrbitGl)
   add_subdirectory(OrbitQt)
+  add_subdirectory(OrbitGgp)
 endif()
 
 if(WIN32)
